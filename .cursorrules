@@ -1,0 +1,5 @@
+# Workspace Rules & Instructions
+
+- **Git Remote Synchronization**: Always save (commit and push) changes to the git remote at the end of every task/session.
+- **Git Push Remote**: Push to the default tracking remote branch (`origin master`).
+- **Git Commit Messages**: Follow git best practices (summarize changes, why, how they were tested) in the commit messages.
