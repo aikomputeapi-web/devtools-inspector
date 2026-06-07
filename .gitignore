@@ -2,3 +2,6 @@ node_modules/
 .env
 chrome-profile/
 *.log
+
+# gstack (global install)
+.amazonq/rules/gstack.md
