@@ -92,6 +92,10 @@ export const toolImplementations = {
   clear_buffer: async () => {
     return await apiFetch('/clear', { method: 'POST' });
   },
+
+  extract_nvidia_key: async () => {
+    return await apiFetch('/nvidia/extract-key');
+  },
 };
 
 // ─── Tool Definitions (Anthropic format) ──────────────────────────────────
@@ -206,6 +210,11 @@ export const toolDefinitions = [
   {
     name: 'clear_buffer',
     description: 'Clear all buffered network requests, console logs, and page events. Useful to start fresh when navigating to a new page.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'extract_nvidia_key',
+    description: 'Extract NVIDIA NIM API key (prefixed with nvapi-) from network traffic, page DOM, cookies, or storage.',
     input_schema: { type: 'object', properties: {}, required: [] },
   },
 ];

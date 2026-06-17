@@ -94,6 +94,13 @@ function main() {
     console.log(c('yellow', '⚠ Using your real Chrome profile. DevTools bridge will have access to your cookies/sessions.'));
   }
 
+  const capsolverPath = 'c:\\Users\\Administrator\\coding\\any-auto-register\\capsolver-ext';
+  if (existsSync(capsolverPath)) {
+    chromeArgs.push(`--disable-extensions-except=${capsolverPath}`);
+    chromeArgs.push(`--load-extension=${capsolverPath}`);
+    console.log(c('green', `✓ Loading CapSolver extension from ${capsolverPath}`));
+  }
+
   if (urlArg) {
     chromeArgs.push(urlArg);
   }

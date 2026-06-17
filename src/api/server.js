@@ -13,7 +13,7 @@ import {
 import {
   connectToTab, listTabs, getDOMSnapshot, queryDOM,
   evaluateJS, getPageInfo, getStorage, getClient,
-  getCurrentTarget, getSseClients
+  getCurrentTarget, getSseClients, getExecutionContexts
 } from '../bridge/cdp-client.js';
 
 export function createServer() {
@@ -153,11 +153,20 @@ export function createServer() {
 
   app.post('/eval', async (req, res) => {
     if (!getClient()) return res.status(503).json({ error: 'Not connected to Chrome' });
-    const { expression, awaitPromise } = req.body;
+    const { expression, awaitPromise, contextId } = req.body;
     if (!expression) return res.status(400).json({ error: 'Missing expression in body' });
     try {
-      const value = await evaluateJS(expression, { awaitPromise });
+      const value = await evaluateJS(expression, { awaitPromise, contextId });
       res.json({ result: value });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/contexts', async (req, res) => {
+    if (!getClient()) return res.status(503).json({ error: 'Not connected to Chrome' });
+    try {
+      res.json(getExecutionContexts());
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -183,6 +192,82 @@ export function createServer() {
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // ─── NVIDIA API Key Extraction ─────────────────────────────────────────────
+
+  app.get('/nvidia/extract-key', async (req, res) => {
+    // 1. Scan network response bodies
+    for (const [requestId, body] of networkBodies.entries()) {
+      if (typeof body === 'string') {
+        const match = body.match(/nvapi-[a-zA-Z0-9_-]{30,}/);
+        if (match) {
+          return res.json({ ok: true, source: 'network', key: match[0] });
+        }
+      }
+    }
+
+    // 2. Scan DOM using evaluateJS
+    if (getClient()) {
+      try {
+        const key = await evaluateJS(`(() => {
+          const selectors = ['code', '[data-testid="api-key"]', 'pre', '.api-key', '[class*="api-key"]', 'input[readonly]'];
+          for (const sel of selectors) {
+            const els = document.querySelectorAll(sel);
+            for (const el of els) {
+              const val = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? el.value : el.innerText;
+              if (val) {
+                const match = val.match(/nvapi-[a-zA-Z0-9_-]{30,}/);
+                if (match) return match[0];
+              }
+            }
+          }
+          // Search full page HTML as fallback
+          const bodyHtml = document.documentElement.outerHTML;
+          const match = bodyHtml.match(/nvapi-[a-zA-Z0-9_-]{30,}/);
+          if (match) return match[0];
+          return null;
+        })()`);
+        
+        if (key) {
+          return res.json({ ok: true, source: 'dom', key });
+        }
+      } catch (err) {
+        // Evaluate failed or not available yet
+      }
+
+      // 3. Scan cookies
+      try {
+        const info = await getPageInfo();
+        if (info && info.cookies) {
+          for (const c of info.cookies) {
+            const val = c.value || '';
+            const match = val.match(/nvapi-[a-zA-Z0-9_-]{30,}/);
+            if (match) {
+              return res.json({ ok: true, source: 'cookie', key: match[0] });
+            }
+          }
+        }
+      } catch (err) {}
+
+      // 4. Scan localStorage and sessionStorage
+      try {
+        const storage = await getStorage();
+        if (storage) {
+          const allStorage = { ...storage.localStorage, ...storage.sessionStorage };
+          for (const val of Object.values(allStorage)) {
+            if (typeof val === 'string') {
+              const match = val.match(/nvapi-[a-zA-Z0-9_-]{30,}/);
+              if (match) {
+                return res.json({ ok: true, source: 'storage', key: match[0] });
+              }
+            }
+          }
+        }
+      } catch (err) {}
+    }
+
+    res.status(404).json({ ok: false, error: 'NVIDIA API key not found yet' });
   });
 
   // ─── Buffer Control ───────────────────────────────────────────────────────
